@@ -1,0 +1,16 @@
+[package]
+name = "parser"
+version = "0.1.0"
+edition = "2021"
+authors = [""]
+
+[lib]
+crate_type = ["lib"]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+bstr = "1.3.0"
+derive_more = "0.99.17"
+logos = "0.12.1"
+nom = "7.1.1"
