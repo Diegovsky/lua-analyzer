@@ -24,14 +24,14 @@ pub use code::*;
 use utils::{ws, paren_comma_list};
 
 // pub type Buf<'a> = &'a [Token<'a>];
-pub type BufElement = char;
-pub type Buf<'a> = &'a str;
-pub type OwnedBuf = String;
+pub type BufElement = u8;
+pub type Buf<'a> = &'a [u8];
+pub type OwnedBuf = Vec<u8>;
 // pub use buf::Buf;
 
 use error::Error;
 
-pub type R<'a, T = Buf<'a>> = IResult<Buf<'a>, T, Error<Buf<'a>>>;
+pub type R<'a, T = Buf<'a>> = IResult<Buf<'a>, T, Error<'a>>;
 
 trait Parseable: Sized {
     fn parse<'a>(i: Buf<'a>) -> R<'a, Self>;
@@ -47,9 +47,8 @@ impl<T> Parseable for Box<T> where T: Parseable {
 pub struct Ident(Str);
 
 impl Ident {
-   pub fn new(ident: impl AsRef<[u8]>) -> Result<Self, nom::Err<nom::error::Error<Buf>>> {
-       todo!();
-       // Ok( Self::parse(ident)?.1 )
+   pub fn new<'a>(ident: impl AsRef<[u8]> + 'a) -> Result<Self, Error<'static>> {
+       Ok( Self::parse(ident.as_ref()).map_err(|e| Error::Message(e.to_string()))?.1 )
    } 
 }
 
@@ -61,7 +60,7 @@ impl std::fmt::Debug for Ident {
 
 impl Parseable for Ident {
     fn parse<'a>(i: Buf<'a>) -> R<'a, Self> {
-        map(alphanumeric1, |content: Buf| Ident(Str{ content } ))
+        map(alphanumeric1, |content: Buf| Ident(Str{ content: content.to_owned() } ))(i)
         // let Some(tk) = i.get(0) else { return Err(Error::msg("Unexpected token")) };
     }
 }

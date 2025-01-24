@@ -10,13 +10,13 @@ pub struct Str {
 
 impl Str {
     pub fn bytes(&self) -> &[u8] {
-        &self.content.as_bytes()
+        &self.content.as_slice()
     }
 }
 
 impl PartialEq<&str> for Str {
     fn eq(&self, other: &&str) -> bool {
-        self.content.eq(*other)
+        self.content.eq(other.as_bytes())
     }
 }
 
@@ -30,7 +30,7 @@ impl Parseable for Str {
     fn parse<'a>(i: Buf<'a>) -> R<'a, Str> {
         fn take_until_escaped<'a>(seq: BufElement) -> impl FnMut(Buf<'a>) -> R<'a> {
             let mut is_escaped = false;
-            move |i| {
+            move |i: Buf<'a>| {
                 let index = i
                     .iter_elements()
                     .enumerate()
@@ -38,7 +38,7 @@ impl Parseable for Str {
                         if x == seq && !is_escaped {
                             return Some(i);
                         }
-                        is_escaped = x == '\\';
+                        is_escaped = x == b'\\';
                         None
                     })
                     .ok_or(nom::Err::Error(nom::error::make_error(
@@ -48,12 +48,12 @@ impl Parseable for Str {
                 Ok((&i[index..], &i[..index]))
             }
         }
-        fn parse_str<'a>(del: &'a str) -> impl FnMut(Buf<'a>) -> R<'a, Str> {
+        fn parse_str<'a>(del: Buf<'a>) -> impl FnMut(Buf<'a>) -> R<'a, Str> {
             move |i| {
                 let (i, content) = delimited(
                     tag(del),
-                    verify(take_until_escaped(del.chars().nth(0).unwrap()), |slc: &str| {
-                        !slc.contains('\n')
+                    verify(take_until_escaped(del[0]), |slc: &Buf| {
+                        !slc.contains(&b'\n')
                     }),
                     tag(del),
                 )(i)?;
@@ -61,13 +61,13 @@ impl Parseable for Str {
                     i,
                     Str {
                         //delimiter: del.as_bytes(),
-                        content: content.to_string(),
+                        content: content.to_owned(),
                     },
                 ))
             }
         }
-        let parse_squote = parse_str("'");
-        let parse_dquote = parse_str("\"");
+        let parse_squote = parse_str(b"'");
+        let parse_dquote = parse_str(b"\"");
         alt((parse_dquote, parse_squote))(i)
     }
 }
@@ -84,27 +84,27 @@ mod test {
 
     #[test]
     fn string_squote() {
-        let (i, st) = Str::parse("'hello'").unwrap();
+        let (i, st) = Str::parse(b"'hello'").unwrap();
         assert_eq!(st, "hello");
         assert!(i.is_empty())
     }
     #[test]
     fn string_dquote() {
-        let (i, st) = Str::parse("\"hello\"").unwrap();
-        assert!(st == "hello");
+        let (i, st) = Str::parse(b"\"hello\"").unwrap();
+        assert!(st == b"hello");
         assert!(i.is_empty())
     }
 
     #[test]
     fn string_squote_esc() {
-        let original = "'hello\\''";
+        let original = b"'hello\\''";
         let (i, st) = Str::parse(original).unwrap();
         assert_eq!(st, "hello\\'");
         assert!(i.is_empty())
     }
     #[test]
     fn string_dquote_esc() {
-        let original = r#""hello\"""#;
+        let original = br#""hello\"""#;
         let (i, st) = Str::parse(original).unwrap();
         assert_eq!(st, "hello\\\"");
         assert!(i.is_empty())
@@ -112,14 +112,14 @@ mod test {
 
     #[test]
     fn string_squote_endline_fail() {
-        let original = "'hello\n\n'";
+        let original = b"'hello\n\n'";
         let r = Str::parse(original);
         r.unwrap_err();
     }
 
     #[test]
     fn string_dquote_endline_fail() {
-        let original = r#""hello
+        let original = br#""hello
 
             ""#;
         let r = Str::parse(original);
@@ -128,14 +128,14 @@ mod test {
 
     #[test]
     fn string_squote_endline() {
-        let original = "'hello\\n\\n'";
+        let original = b"'hello\\n\\n'";
         let r = Str::parse(original);
         r.unwrap();
     }
 
     #[test]
     fn string_dquote_endline() {
-        let original = r#""hello\n\n""#;
+        let original = br#""hello\n\n""#;
         let r = Str::parse(original);
         r.unwrap();
     }

@@ -5,7 +5,7 @@ edition = "2021"
 authors = [""]
 
 [lib]
-crate_type = ["lib"]
+crate-type = ["lib"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

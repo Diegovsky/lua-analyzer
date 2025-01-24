@@ -58,22 +58,22 @@ enum RawToken {
     SymbolCloseBrace,
 
     #[token("=")]
-    SymbolAssign,
+    SymbolEquals,
 
     #[token("[")]
-    SymbolLeftBracket,
+    SymbolOpenBracket,
 
     #[token("]")]
-    SymbolRightBracket,
+    SymbolCloseBracket,
 
     #[token(",")]
     SymbolComma,
 
     #[token("(")]
-    SymbolLeftParen,
+    SymbolOpenParen,
 
     #[token(")")]
-    SymbolRightParen,
+    SymbolCloseParen,
 
     #[regex("[a-zA-Z][a-zA-Z0-9]*")]
     Ident,
@@ -107,7 +107,7 @@ mod tests {
     fn decl() {
         let mut it = lex("a = 10");
         assert_eq!(it.next().unwrap().raw, RawToken::Ident);
-        assert_eq!(it.next().unwrap().raw, RawToken::SymbolAssign);
+        assert_eq!(it.next().unwrap().raw, RawToken::SymbolEquals);
         assert_eq!(it.next().unwrap().raw, RawToken::Number);
         assert_eq!(it.next(), None)
     }
@@ -117,7 +117,7 @@ mod tests {
         let mut it = lex("local a = 10");
         assert_eq!(it.next().unwrap().raw, RawToken::KeywordLocal);
         assert_eq!(it.next(), Some(Token {raw: RawToken::Ident, slice: "a"}));
-        assert_eq!(it.next().unwrap().raw, RawToken::SymbolAssign);
+        assert_eq!(it.next().unwrap().raw, RawToken::SymbolEquals);
         assert_eq!(it.next(), Some(Token { raw: RawToken::Number, slice: "10" }));
         assert_eq!(it.next(), None)
     }
@@ -146,5 +146,110 @@ mod tests {
         assert_eq!(it.next(), Some(Token { raw: RawToken::Number, slice: "2222.0" }));
         assert_eq!(it.next(), Some(Token { raw: RawToken::Number, slice: "67.333333333" }));
         assert_eq!(it.next(), None)
+    }
+
+    const fn tk(raw: RawToken, slice: &str) -> Token {
+        Token {
+            raw,
+            slice
+        }
+    }
+
+    macro_rules! sdq {
+        ($expr:expr) => {
+            tk(StringDoubleQuoted, concat!("\"", $expr, "\""))
+        };
+    }
+
+    macro_rules! ssq {
+        ($expr:expr) => {
+            tk(StringSingleQuoted, concat!("'", $expr, "'"))
+        };
+    }
+    const fn id(slice: &str) -> Token {
+        tk(Ident, slice)
+    }
+
+    const fn num(slice: &str) -> Token {
+        tk(Number, slice)
+    }
+
+    const fn seq() -> Token<'static> {
+        tk(SymbolEquals, "=")
+    }
+
+    const fn ss() -> Token<'static> {
+        tk(SymbolSemi, ";")
+    }
+
+    const fn sc() -> Token<'static> {
+        tk(SymbolComma, ",")
+    }
+
+    const fn nl() -> Token<'static> {
+        tk(Newline, "\n")
+    }
+
+    const fn sobr() -> Token<'static> {
+        tk(SymbolOpenBracket, "[")
+    }
+
+    const fn scbr() -> Token<'static> {
+        tk(SymbolCloseBracket, "]")
+    }
+
+    const fn sob() -> Token<'static> {
+        tk(SymbolOpenBrace, "{")
+    }
+
+    const fn scb() -> Token<'static> {
+        tk(SymbolCloseBrace, "}")
+    }
+
+    use RawToken::*;
+
+    macro_rules! assert_lex {
+        ($expr:expr, $expected:expr) => {
+            for (gotten, expected) in lex($expr).zip($expected) {
+                assert_eq!(gotten, expected);
+            }
+        };
+    }
+
+    #[test]
+    fn strings() {
+        let it = r#" "double" 'single' "#;
+        let expected = [
+            sdq!("double"),
+            ssq!("single"),
+        ];
+        assert_lex!(it, expected);
+    }
+
+    #[test]
+    fn table() {
+        let mut it = "{a = 10;\nb=2, [\"_\"] = 9}";
+        let expected = [
+            sob(),
+
+            id("a"),
+            seq(),
+            num("10"),
+            ss(),
+            nl(),
+
+            id("b"),
+            seq(),
+            num("2"),
+            sc(),
+
+            sobr(),
+            sdq!("_"),
+            scbr(),
+            seq(),
+            num("9"),
+            scb(),
+        ];
+        assert_lex!(it, expected);
     }
 }

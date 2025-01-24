@@ -1,39 +1,68 @@
-use std::fmt::{Debug, Display};
+use std::{fmt::{Debug, Display}, error::Error as StdError};
 
 use derive_more::From;
 use nom::error::ParseError;
 
-#[derive(Debug, From)]
-pub enum Error<I> {
-    Nom(nom::error::Error<I>),
+use crate::Buf;
+
+#[derive(From)]
+pub enum Error<'a> {
+    Nom(nom::error::Error<Buf<'a>>),
     Message(String),
-    Bunch(Box<Self>, Box<Self>),
-    Other(Box<dyn std::error::Error>)
+    // Chained{ current: Box<Self>, caused_by: Box<Self> }
 }
 
-impl<I> Error<I> {
+impl Error<'_>{
     pub fn msg(msg: impl Into<String>) -> Self {
         Self::Message(msg.into())
-    } 
+    }
 }
 
-impl<I> std::fmt::Display for Error<I> where I: Display {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl<'a> Error<'a>{
+    pub fn replace_input<'b: 'a>(self, new_input: Buf<'b>) -> Error<'b> where Self: 'a {
         match self {
-            Error::Nom(err) => Display::fmt(err, f),
-            Error::Message(msg) => write!(f, "Parse Error: {:?}", msg),
-            Error::Other(err) => write!(f, "Parse Error: {}", err),
-            Error::Bunch(x, tail) => { write!(f, "Error: {}\n\tCaused by: {}", x, tail) }
+            Error::Nom(nom) => Error::Nom(nom::error::Error::from_error_kind(new_input, nom.code)),
+            Error::Message(e) => Error::Message(e),
+            // Error::Chained { current, caused_by } => Error::Chained { current: Box::new(current.replace_input(new_input)), caused_by }
         }
     }
 }
 
-impl<I> ParseError<I> for Error<I> {
-    fn from_error_kind(input: I, kind: nom::error::ErrorKind) -> Self {
+impl std::fmt::Debug for Error<'_>{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Error::Nom(err) => {
+                let fmted =
+                if true {
+                    let input: &&[u8] = unsafe { std::mem::transmute(&err.input) };
+                    format!("\"{}\"", std::str::from_utf8(input).unwrap())
+                } else {
+                   format!("{:?}", err.input)
+                };
+                let err = nom::error::Error::from_error_kind(fmted.as_str(), err.code);
+                Display::fmt(&err, f)
+            },
+            Error::Message(msg) => write!(f, "Parse Error: {:?}", msg),
+            // Error::Chained{ current, caused_by } => { write!(f, "Error: {}\n\tCaused by: {}", current, caused_by) }
+        }
+    }
+}
+
+impl std::fmt::Display for Error<'_>{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Debug::fmt(self, f)
+    }
+}
+
+impl StdError for Error<'_>{ }
+
+impl<'a> ParseError<Buf<'a>> for Error<'a>{
+    fn from_error_kind(input: Buf<'a>, kind: nom::error::ErrorKind) -> Self {
         Self::Nom(nom::error::Error::from_error_kind(input, kind))
     }
 
-    fn append(input: I, kind: nom::error::ErrorKind, other: Self) -> Self {
-        Self::Bunch(Box::new(Self::from_error_kind(input, kind)), Box::new(other))
+    fn append(input: Buf<'_>, kind: nom::error::ErrorKind, other: Self) -> Self {
+        other
+        // Self::Chained{ current: Box::new(Self::from_error_kind(input, kind)), caused_by: Box::new(other) }
     }
 }

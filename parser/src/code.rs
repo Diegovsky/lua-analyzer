@@ -4,7 +4,7 @@ use nom::{bytes::complete::tag, character::complete::one_of, combinator::opt, se
 use crate::{
     alt_from, consume_til_eol,
     utils::{self, ws},
-    Buf, Call, Expr, Ident, Parseable, R, lhs::Function,
+    Buf, Call, Expr, Ident, Parseable, R, lhs::Function
 };
 
 #[derive(From, TryInto, Clone, Debug, PartialEq)]
@@ -16,6 +16,7 @@ pub enum Statement {
 
 impl Parseable for Statement {
     fn parse<'a>(i: Buf<'a>) -> R<'a, Self> {
+        dbg!(std::str::from_utf8(i));
         alt_from!(Return, Decl, Call)(i)
     }
 }
@@ -58,7 +59,10 @@ impl Parseable for Decl {
         fn func_decl<'a>(i: Buf<'a>) -> R<'a, (Ident, Expr)> {
             let (i, name) = preceded(tag("function"), ws(Ident::parse))(i)?;
             let rest: Vec<u8> = [b"function".as_slice(), i].into_iter().flatten().copied().collect();
-            let (afterfunc, func) = Function::parse(&rest).map_err(|err| err.map_input(|_| i))?;
+            let (afterfunc, func) = match Function::parse(&rest) {
+                Ok(v) => v,
+                Err(e) => return Err(e.map(|e| e.replace_input(i))),
+            };
             let bytes_consumed = afterfunc.as_ptr() as usize - rest.as_ptr() as usize;
             let i = &i[bytes_consumed - b"function".len()..];
             Ok((i, (name, func.into())))

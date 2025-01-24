@@ -204,5 +204,6 @@ fn main() -> R {
         Ok(vec![ Value::Nil ])
     }));
     let ret = state.execute(&parsed.1);
+    dbg!(ret);
     Ok(())
 }
